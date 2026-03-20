@@ -1,0 +1,40 @@
+name: Bump Formula on Repository Dispatch
+
+on:
+  repository_dispatch:
+    types: [bump-formula]
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute SHA256 of sdist
+        id: meta
+        run: |
+          VERSION="${{ github.event.client_payload.version }}"
+          URL="https://files.pythonhosted.org/packages/source/a/archi2likec4/archi2likec4-${VERSION}.tar.gz"
+          for i in 1 2 3 4 5; do
+            SHA256=$(curl -sL "$URL" | shasum -a 256 | cut -d' ' -f1)
+            [ -n "$SHA256" ] && break
+            sleep 10
+          done
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
+          echo "url=${URL}" >> "$GITHUB_OUTPUT"
+
+      - name: Update Formula
+        run: |
+          VERSION="${{ steps.meta.outputs.version }}"
+          SHA256="${{ steps.meta.outputs.sha256 }}"
+          URL="${{ steps.meta.outputs.url }}"
+          sed -i "s|url \".*\"|url \"${URL}\"|" Formula/archi2likec4.rb
+          sed -i "s|sha256 \".*\"|sha256 \"${SHA256}\"|" Formula/archi2likec4.rb
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -am "archi2likec4 ${{ steps.meta.outputs.version }}"
+          git push
